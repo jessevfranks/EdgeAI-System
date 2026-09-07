@@ -1,0 +1,5 @@
+split: test
+device: "0"
+imgsz: 640
+batch: 8
+plots: true

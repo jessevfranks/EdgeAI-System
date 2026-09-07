@@ -1,0 +1,6 @@
+# Reserved for the onboard RGB inference pipeline.
+model: artifacts/models/yolov8n/best.pt
+device: "0"
+imgsz: 640
+confidence: 0.25
+iou: 0.7

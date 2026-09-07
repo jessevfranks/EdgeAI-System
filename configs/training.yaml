@@ -1,0 +1,53 @@
+paths:
+  database: runs/experiments.sqlite3
+  run_root: runs
+  artifact_root: artifacts
+
+defaults:
+  optimizer: SGD
+  device: "0"
+  imgsz: 640
+  batch: 8
+  patience: 50
+  seed: 42
+  workers: 8
+  cache: false
+  amp: true
+  deterministic: false
+
+profiles:
+  research_baseline:
+    mode: train
+    epochs: 300
+    optimizer: SGD
+    lr0: 0.01
+    batch: 8
+    patience: 50
+
+  starter_tune:
+    mode: tune
+    epochs: 20
+    iterations: 10
+    optimizer: SGD
+    batch: 8
+    patience: 50
+    search_profile: core_wide
+
+  final_train:
+    mode: train
+    epochs: 300
+    optimizer: SGD
+    batch: 8
+    patience: 50
+
+search_spaces:
+  core_wide:
+    lr0: [0.00001, 0.05]
+    lrf: [0.001, 1.0]
+    momentum: [0.70, 0.99]
+    weight_decay: [0.0, 0.002]
+    warmup_epochs: [0.0, 10.0]
+    warmup_momentum: [0.0, 0.95]
+    box: [1.0, 20.0]
+    cls: [0.1, 4.0]
+    dfl: [0.4, 12.0]
