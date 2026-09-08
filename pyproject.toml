@@ -9,11 +9,7 @@ description = "UI-first YOLOv8 fine-tuning and edge inference research pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pandas>=2.2,<3",
-    "psutil>=6,<8",
-    "PyYAML>=6,<7",
     "streamlit>=1.40,<2",
-    "streamlit-autorefresh>=1.0.1,<2",
     "ultralytics>=8.3,<9",
 ]
 

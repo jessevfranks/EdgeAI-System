@@ -5,15 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
 
-from edge_ai.config import ExperimentConfig, ModelScale
-from edge_ai.experiments import (
-    create_evaluation,
-    evaluate_model,
-    promote_best,
-    train_model,
-    tune_model,
-)
+from edge_ai.config import ExperimentConfig
+from edge_ai.experiments import evaluate_model, train_model, tune_model
+from edge_ai.metrics import sync_metrics
 from edge_ai.storage import ExperimentStorage
+from edge_ai.worker import WORKFLOWS, run_worker
 
 
 class FakeYOLO:
@@ -21,25 +17,22 @@ class FakeYOLO:
 
     def __init__(self, checkpoint: str) -> None:
         self.checkpoint = checkpoint
-        self.model = SimpleNamespace(parameters=list)
 
-    def train(self, **kwargs):
+    def train(self, **kwargs) -> None:
         self.calls.append(("train", kwargs))
         output = Path(kwargs["project"]) / kwargs["name"]
         (output / "weights").mkdir(parents=True, exist_ok=True)
         (output / "weights" / "best.pt").write_bytes(b"best")
-        (output / "weights" / "last.pt").write_bytes(b"last")
         (output / "results.csv").write_text(
             "epoch,metrics/precision(B),metrics/recall(B),metrics/mAP50(B),metrics/mAP50-95(B)\n"
             "1,0.7,0.6,0.65,0.45\n",
             encoding="utf-8",
         )
 
-    def tune(self, **kwargs):
+    def tune(self, **kwargs) -> None:
         self.calls.append(("tune", kwargs))
         output = Path(kwargs["project"]) / kwargs["name"]
-        (output / "weights").mkdir(parents=True, exist_ok=True)
-        (output / "weights" / "best.pt").write_bytes(b"best")
+        output.mkdir(parents=True, exist_ok=True)
         (output / "tune_results.ndjson").write_text(
             json.dumps(
                 {
@@ -67,72 +60,67 @@ class FakeYOLO:
 
 
 def _dataset(tmp_path: Path) -> Path:
-    source = tmp_path / "dataset.yaml"
-    source.write_text("train: train\nval: val\ntest: test\nnames: [target]\n", encoding="utf-8")
-    return source
+    path = tmp_path / "dataset.yaml"
+    path.write_text("train: train\nval: val\ntest: test\nnames: [target]\n", encoding="utf-8")
+    return path
 
 
-def _paths(tmp_path: Path) -> dict:
-    return {
-        "database_path": tmp_path / "runs.sqlite3",
-        "run_root": tmp_path / "runs",
-        "artifact_root": tmp_path / "artifacts",
-    }
-
-
-def test_train_and_tune_call_ultralytics_and_ingest_metrics(tmp_path: Path, monkeypatch) -> None:
+def test_train_and_tune_keep_full_metric_history(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("edge_ai.experiments.yolo_class", lambda: FakeYOLO)
-    training = ExperimentConfig(
-        action="train",
-        data=str(_dataset(tmp_path)), scale=ModelScale.NANO, name="baseline", **_paths(tmp_path)
-    )
-    storage = ExperimentStorage(training.database_path)
-    training_record = storage.create_experiment(training)
-    train_model(training, ModelScale.NANO)
-    assert storage.metrics(training_record.id, "epoch")[0]["map50_95"] == 0.45
-    assert storage.metrics(training_record.id, "summary")[0]["parameters"] == 0
+    storage = ExperimentStorage(tmp_path / "experiments.sqlite3")
 
-    tuning = ExperimentConfig(
-        action="tune",
-        data=str(_dataset(tmp_path)), scale=ModelScale.SMALL, name="tune", **_paths(tmp_path)
-    )
-    tuning_record = storage.create_experiment(tuning)
-    tune_model(tuning, ModelScale.SMALL)
-    assert storage.metrics(tuning_record.id, "trial")[0]["fitness"] == 0.5
+    training = ExperimentConfig(action="train", name="train", data=str(_dataset(tmp_path)))
+    train_record = storage.create_experiment(training)
+    train_model(training, Path(train_record.run_dir))
+    sync_metrics(storage, train_record)
+    assert storage.metrics(train_record.id, "epoch")[0]["map50_95"] == 0.45
+
+    tuning = ExperimentConfig(action="tune", name="tune", data=str(_dataset(tmp_path)), epochs=20)
+    tune_record = storage.create_experiment(tuning)
+    tune_model(tuning, Path(tune_record.run_dir))
+    sync_metrics(storage, tune_record)
+    assert storage.metrics(tune_record.id, "trial")[0]["hyperparameters"] == {"lr0": 0.005}
     assert FakeYOLO.calls[-1][1]["use_ray"] is False
 
 
-def test_completed_training_can_be_evaluated(tmp_path: Path, monkeypatch) -> None:
+def test_evaluate_returns_key_metrics(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("edge_ai.experiments.yolo_class", lambda: FakeYOLO)
+    weights = tmp_path / "best.pt"
+    weights.write_bytes(b"best")
     config = ExperimentConfig(
-        action="train",
+        action="evaluate",
+        name="evaluate",
         data=str(_dataset(tmp_path)),
-        scale=ModelScale.NANO,
-        name="trained",
-        **_paths(tmp_path),
+        weights=str(weights),
     )
-    storage = ExperimentStorage(config.database_path)
-    training = storage.create_experiment(config)
-    train_model(config)
-    storage.set_status(training.id, "completed")
-    evaluation = create_evaluation(training.id, storage.path)
-    evaluate_model(ExperimentConfig.from_dict(evaluation.config))
-    assert storage.metrics(evaluation.id, "evaluation")[0]["map50_95"] == 0.55
+    metrics = evaluate_model(config, tmp_path / "run")
+    assert metrics["map50_95"] == 0.55
+    assert metrics["speed_inference_ms"] == 4.2
 
 
-def test_explicit_promotion_uses_best_hyperparameters(tmp_path: Path) -> None:
-    storage = ExperimentStorage(tmp_path / "runs.sqlite3")
-    config = ExperimentConfig(
-        action="tune",
-        data=str(_dataset(tmp_path)), scale=ModelScale.MEDIUM, name="tune", **_paths(tmp_path)
+def test_worker_records_success_and_failure(tmp_path: Path, monkeypatch) -> None:
+    storage = ExperimentStorage(tmp_path / "experiments.sqlite3")
+    successful = storage.create_experiment(
+        ExperimentConfig(action="train", name="success", data=str(_dataset(tmp_path)))
     )
-    record = storage.create_experiment(config)
-    storage.set_status(record.id, "running", pid=123)
-    storage.save_metric(
-        record.id, "trial", 1, {"fitness": 0.6, "map50_95": 0.6, "hyperparameters": {"lr0": 0.003}}
+    monkeypatch.setitem(WORKFLOWS, "train", lambda config, run_dir: None)
+    assert run_worker(storage.path, successful.id) == 0
+    assert storage.get(successful.id).status == "completed"
+
+    failed = storage.create_experiment(
+        ExperimentConfig(action="train", name="failure", data=str(_dataset(tmp_path)))
     )
-    storage.set_status(record.id, "completed")
-    promoted = promote_best(record.id, storage.path)
-    assert promoted.action == "train"
-    assert promoted.parent_id == record.id
-    assert promoted.config["extra_args"]["lr0"] == 0.003
+
+    def fail(config, run_dir):
+        raise RuntimeError("training failed")
+
+    monkeypatch.setitem(WORKFLOWS, "train", fail)
+    assert run_worker(storage.path, failed.id) == 1
+    assert storage.get(failed.id).error == "training failed"
+
+    invalid = storage.create_experiment(
+        ExperimentConfig(action="train", name="invalid", data=str(_dataset(tmp_path)))
+    )
+    Path(invalid.config["data"]).unlink()
+    assert run_worker(storage.path, invalid.id) == 1
+    assert storage.get(invalid.id).status == "failed"

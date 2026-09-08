@@ -5,9 +5,6 @@ from __future__ import annotations
 import csv
 import json
 import math
-import platform
-import subprocess
-from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -95,9 +92,6 @@ def sync_metrics(storage: ExperimentStorage, record: ExperimentRecord) -> Experi
             for index, row in enumerate(rows, start=1):
                 step = int(row.pop("epoch", index))
                 storage.save_metric(record.id, "epoch", step, row)
-            fitness = [row["fitness"] for row in rows if isinstance(row.get("fitness"), (int, float))]
-            if fitness:
-                storage.update_progress(record.id, fitness=max(fitness))
 
     if record.action == "tune":
         source = newest(root, "tune_results.ndjson")
@@ -106,12 +100,6 @@ def sync_metrics(storage: ExperimentStorage, record: ExperimentRecord) -> Experi
             for trial in trials:
                 step = trial.pop("iteration")
                 storage.save_metric(record.id, "trial", step, trial)
-            fitness = [trial["fitness"] for trial in trials if isinstance(trial.get("fitness"), (int, float))]
-            storage.update_progress(
-                record.id,
-                step=len(trials),
-                fitness=max(fitness) if fitness else None,
-            )
     return storage.get(record.id)
 
 
@@ -119,28 +107,3 @@ def result_metrics(result: Any) -> dict[str, Any]:
     values = normalize_metrics(dict(getattr(result, "results_dict", {}) or {}))
     values.update({f"speed_{key}_ms": number(value) for key, value in (getattr(result, "speed", {}) or {}).items()})
     return values
-
-
-def environment_info() -> dict[str, Any]:
-    """Small reproducibility snapshot written into each run manifest."""
-    result = {"python": platform.python_version(), "platform": platform.platform()}
-    for package in ("ultralytics", "torch"):
-        try:
-            result[package] = metadata.version(package)
-        except metadata.PackageNotFoundError:
-            result[package] = None
-    try:
-        result["git_revision"] = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5, check=False
-        ).stdout.strip()
-    except OSError:
-        result["git_revision"] = ""
-    try:
-        import torch
-
-        result["cuda_available"] = torch.cuda.is_available()
-        if torch.cuda.is_available():
-            result["gpu"] = torch.cuda.get_device_name(0)
-    except (ImportError, RuntimeError):
-        result["cuda_available"] = False
-    return result
