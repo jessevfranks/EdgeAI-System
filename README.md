@@ -11,6 +11,8 @@ YOLOv8 object-detection models from a local Streamlit dashboard.
 - Evaluate trained checkpoints on the validation or test split.
 - Store experiment status, epoch metrics, tuning trials, evaluation metrics,
   and winning hyperparameters in SQLite.
+- Receive RGB camera frames, assign persistent frame IDs and UTC timestamps,
+  and save raw and processed copies through an extendable onboard pipeline.
 
 Each experiment runs in a separate background process so the dashboard remains
 usable. The app intentionally has no device scheduler, stop control, automatic
@@ -58,6 +60,19 @@ runs/
     `-- evaluate/
 ```
 
+Onboard frames are stored under the ignored `data/onboard/` directory. Raw
+captures and processed results share the same labeled PNG filename:
+
+```text
+data/onboard/
+|-- raw/frame_000001_20260910T132345123456Z.png
+`-- processed/frame_000001_20260910T132345123456Z.png
+```
+
+Camera integrations provide a Pillow image to `ImageAcquirer.acquire`. Add
+callable processing steps to `ImagePipeline`; an empty pipeline saves an
+unchanged processed copy.
+
 ## Database reset
 
 The simplified database is not compatible with the earlier experiment schema.
@@ -68,13 +83,9 @@ automatically.
 ## Code structure
 
 ```text
-src/edge_ai/
-|-- config.py       # Small experiment dataclass
-|-- dashboard.py    # Two-page Streamlit UI and worker launcher
-|-- experiments.py  # Ultralytics train, tune, and evaluate calls
-|-- metrics.py      # Metric normalization and ingestion
-|-- storage.py      # SQLite history
-`-- worker.py       # One background experiment process
+src/
+|-- model_development/  # Training, evaluation, dashboard, and experiment history
+`-- onboard/            # RGB image acquisition, identity, storage, and processing
 ```
 
 ## Tests
