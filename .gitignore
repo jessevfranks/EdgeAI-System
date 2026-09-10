@@ -221,3 +221,8 @@ __marimo__/
 /data/
 /runs/
 /artifacts/
+.codex/
+
+# Codex local agent workspace
+/.agents/
+AGENTS.md
