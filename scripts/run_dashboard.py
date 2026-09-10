@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main() -> None:
     project = Path(__file__).resolve().parents[1]
-    dashboard = project / "src" / "edge_ai" / "dashboard.py"
+    dashboard = project / "src" / "model_development" / "dashboard.py"
     sys.path.insert(0, str(project / "src"))
     os.chdir(project)
 

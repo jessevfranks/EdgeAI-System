@@ -66,7 +66,7 @@ def _dataset(tmp_path: Path) -> Path:
 
 
 def test_train_and_tune_keep_full_metric_history(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("edge_ai.experiments.yolo_class", lambda: FakeYOLO)
+    monkeypatch.setattr("model_development.experiments.yolo_class", lambda: FakeYOLO)
     storage = ExperimentStorage(tmp_path / "experiments.sqlite3")
 
     training = ExperimentConfig(action="train", name="train", data=str(_dataset(tmp_path)))
@@ -84,7 +84,7 @@ def test_train_and_tune_keep_full_metric_history(tmp_path: Path, monkeypatch) ->
 
 
 def test_evaluate_returns_key_metrics(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("edge_ai.experiments.yolo_class", lambda: FakeYOLO)
+    monkeypatch.setattr("model_development.experiments.yolo_class", lambda: FakeYOLO)
     weights = tmp_path / "best.pt"
     weights.write_bytes(b"best")
     config = ExperimentConfig(

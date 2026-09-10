@@ -23,7 +23,7 @@ def _start_worker(storage: ExperimentStorage, record: ExperimentRecord) -> None:
         sys.executable,
         "-u",
         "-m",
-        "edge_ai.worker",
+        "model_development.worker",
         str(storage.path),
         record.id,
     ]

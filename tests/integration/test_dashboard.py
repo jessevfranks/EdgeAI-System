@@ -15,7 +15,7 @@ def _dataset(tmp_path: Path) -> Path:
 
 
 def test_dashboard_pages_render() -> None:
-    dashboard = Path(__file__).resolve().parents[2] / "src" / "edge_ai" / "dashboard.py"
+    dashboard = Path(__file__).resolve().parents[2] / "src" / "model_development" / "dashboard.py"
     app = AppTest.from_file(str(dashboard)).run(timeout=20)
     assert not app.exception
     assert app.title[0].value == "EdgeAI YOLOv8 Experiments"
@@ -47,7 +47,8 @@ def test_start_worker_creates_log(tmp_path: Path, monkeypatch) -> None:
         ExperimentConfig(action="train", name="train", data=str(_dataset(tmp_path)))
     )
     monkeypatch.setattr(
-        "edge_ai.dashboard.subprocess.Popen", lambda *args, **kwargs: SimpleNamespace(pid=123)
+        "model_development.dashboard.subprocess.Popen",
+        lambda *args, **kwargs: SimpleNamespace(pid=123),
     )
     _start_worker(storage, record)
     assert (Path(record.run_dir) / "worker.log").exists()
