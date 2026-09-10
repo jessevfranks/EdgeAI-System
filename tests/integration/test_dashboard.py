@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 from streamlit.testing.v1 import AppTest
 
-from edge_ai.config import ExperimentConfig
-from edge_ai.dashboard import _evaluation_config, _promoted_config, _start_worker
-from edge_ai.storage import ExperimentStorage
+from model_development.config import ExperimentConfig
+from model_development.dashboard import _evaluation_config, _promoted_config, _start_worker
+from model_development.storage import ExperimentStorage
 
 
 def _dataset(tmp_path: Path) -> Path:

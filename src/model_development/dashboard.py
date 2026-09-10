@@ -9,9 +9,9 @@ from typing import Any
 
 import streamlit as st
 
-from edge_ai.config import MODEL_SCALES, ExperimentConfig
-from edge_ai.metrics import sync_metrics
-from edge_ai.storage import ExperimentRecord, ExperimentStorage
+from model_development.config import MODEL_SCALES, ExperimentConfig
+from model_development.metrics import sync_metrics
+from model_development.storage import ExperimentRecord, ExperimentStorage
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATABASE_PATH = PROJECT_ROOT / "runs" / "experiments.sqlite3"

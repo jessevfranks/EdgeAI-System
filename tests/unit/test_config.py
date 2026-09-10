@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from edge_ai.config import ExperimentConfig, model_checkpoint
+from model_development.config import ExperimentConfig, model_checkpoint
 
 
 def _dataset(tmp_path: Path) -> Path:

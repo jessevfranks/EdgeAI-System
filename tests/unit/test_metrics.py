@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from edge_ai.metrics import normalize_metrics, read_results_csv, read_tune_ndjson
+from model_development.metrics import normalize_metrics, read_results_csv, read_tune_ndjson
 
 
 def test_normalize_detection_metrics_and_fitness() -> None:

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from edge_ai.config import ExperimentConfig
-from edge_ai.storage import ExperimentStorage
+from model_development.config import ExperimentConfig
+from model_development.storage import ExperimentStorage
 
 
 def _config(tmp_path: Path, action: str = "train") -> ExperimentConfig:

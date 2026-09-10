@@ -5,11 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
 
-from edge_ai.config import ExperimentConfig
-from edge_ai.experiments import evaluate_model, train_model, tune_model
-from edge_ai.metrics import sync_metrics
-from edge_ai.storage import ExperimentStorage
-from edge_ai.worker import WORKFLOWS, run_worker
+from model_development.config import ExperimentConfig
+from model_development.experiments import evaluate_model, train_model, tune_model
+from model_development.metrics import sync_metrics
+from model_development.storage import ExperimentStorage
+from model_development.worker import WORKFLOWS, run_worker
 
 
 class FakeYOLO:
