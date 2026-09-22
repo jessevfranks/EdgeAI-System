@@ -37,7 +37,7 @@ Ultralytics downloads model weights the first time a scale is used.
 ## Using the dashboard
 
 1. On **New Experiment**, choose training or genetic tuning, select a YOLO
-   scale, and enter a local Ultralytics dataset YAML.
+   scale, a CPU or detected GPU, and a local Ultralytics dataset YAML.
 2. On **Experiments**, use **Refresh** to update status and view stored metrics
    or the worker log.
 3. For a completed tuning run, click **Train with best settings** to start a
@@ -45,10 +45,15 @@ Ultralytics downloads model weights the first time a scale is used.
 4. For a completed training run, choose `test` or `val` and click
    **Evaluate checkpoint**.
 
-The form defaults are GPU `0`, image size `640`, batch `8`, 300 training
-epochs, 20 epochs per tuning trial, and 10 tuning iterations.
+The form defaults to CPU, image size `320`, batch `4`, one training epoch,
+20 epochs per tuning trial, and 10 tuning iterations. If the local COCO8
+dataset exists at `data/tuning/coco8/coco8.yaml`, the form selects it by
+default. CPU runs use `device=cpu`; a detected GPU uses its numeric index,
+such as `device=0`. Device choice is an experiment setting, not part of the
+dataset YAML.
 
-Generated files are stored under `runs/`:
+Logs and metrics are stored under `runs/`. Completed training checkpoints are
+moved into `artifacts/` under the same experiment ID:
 
 ```text
 runs/
@@ -58,6 +63,11 @@ runs/
     |-- train/
     |-- tune/
     `-- evaluate/
+artifacts/
+`-- <experiment-id>/
+    `-- train/weights/
+        |-- best.pt
+        `-- last.pt
 ```
 
 Onboard frames are stored under the ignored `data/onboard/` directory. Raw

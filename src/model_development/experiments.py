@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,14 @@ def yolo_class() -> Any:
         return YOLO
     except ImportError as exc:
         raise RuntimeError("Install the project dependencies before running an experiment") from exc
+
+
+def move_checkpoints(run_dir: Path, artifact_dir: Path) -> None:
+    """Keep Ultralytics' checkpoint paths relative to the experiment run."""
+    for checkpoint in run_dir.rglob("*.pt"):
+        target = artifact_dir / checkpoint.relative_to(run_dir)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(checkpoint, target)
 
 
 def train_model(config: ExperimentConfig, run_dir: Path) -> None:

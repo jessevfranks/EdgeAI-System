@@ -50,8 +50,14 @@ class ExperimentRecord:
         return self.config.get("device", "0")
 
     @property
+    def artifact_dir(self) -> Path:
+        return Path(self.run_dir).parent.parent / "artifacts" / self.id
+
+    @property
     def best_checkpoint(self) -> str | None:
-        checkpoints = list(Path(self.run_dir).rglob("best.pt"))
+        checkpoints = list(self.artifact_dir.rglob("best.pt"))
+        if not checkpoints:
+            checkpoints = list(Path(self.run_dir).rglob("best.pt"))
         if not checkpoints:
             return None
         return str(max(checkpoints, key=lambda path: path.stat().st_mtime).resolve())
@@ -62,7 +68,12 @@ class ExperimentStorage:
         self.path = Path(database_path).expanduser().resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
-            db.executescript(
+            db.execute("BEGIN IMMEDIATE")
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(experiments)")}
+            legacy_schema = {"action", "name", "scale"}.issubset(columns)
+            if legacy_schema:
+                db.execute("ALTER TABLE experiments RENAME TO experiments_legacy")
+            db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS experiments (
                     id TEXT PRIMARY KEY,
@@ -71,7 +82,20 @@ class ExperimentStorage:
                     run_dir TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     error TEXT
-                );
+                )
+                """
+            )
+            if legacy_schema:
+                # These fields retain the configuration, history, and run artifact paths.
+                db.execute(
+                    """INSERT INTO experiments
+                    (id, status, config_json, run_dir, created_at, error)
+                    SELECT id, status, config_json, run_dir, created_at, error
+                    FROM experiments_legacy"""
+                )
+                db.execute("DROP TABLE experiments_legacy")
+            db.execute(
+                """
                 CREATE TABLE IF NOT EXISTS metrics (
                     experiment_id TEXT NOT NULL,
                     kind TEXT NOT NULL,
@@ -93,7 +117,9 @@ class ExperimentStorage:
         run_dir.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute(
-                "INSERT INTO experiments VALUES (?, ?, ?, ?, ?, ?)",
+                """INSERT INTO experiments
+                (id, status, config_json, run_dir, created_at, error)
+                VALUES (?, ?, ?, ?, ?, ?)""",
                 (
                     experiment_id,
                     "starting",
@@ -132,7 +158,7 @@ class ExperimentStorage:
     def save_metric(self, experiment_id: str, kind: str, step: int, data: dict[str, Any]) -> None:
         with self._connect() as db:
             db.execute(
-                """INSERT INTO metrics VALUES (?, ?, ?, ?)
+                """INSERT INTO metrics (experiment_id, kind, step, data_json) VALUES (?, ?, ?, ?)
                 ON CONFLICT(experiment_id, kind, step) DO UPDATE SET data_json = excluded.data_json""",
                 (experiment_id, kind, step, json.dumps(data, sort_keys=True)),
             )

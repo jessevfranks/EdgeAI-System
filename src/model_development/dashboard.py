@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,12 +10,18 @@ from typing import Any
 
 import streamlit as st
 
-from model_development.config import MODEL_SCALES, ExperimentConfig
+from model_development.config import (
+    MODEL_SCALES,
+    ExperimentConfig,
+    available_devices,
+    validate_device_available,
+)
 from model_development.metrics import sync_metrics
 from model_development.storage import ExperimentRecord, ExperimentStorage
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATABASE_PATH = PROJECT_ROOT / "runs" / "experiments.sqlite3"
+COCO8_YAML = PROJECT_ROOT / "data" / "tuning" / "coco8" / "coco8.yaml"
 
 
 def _start_worker(storage: ExperimentStorage, record: ExperimentRecord) -> None:
@@ -27,6 +34,10 @@ def _start_worker(storage: ExperimentStorage, record: ExperimentRecord) -> None:
         str(storage.path),
         record.id,
     ]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        part for part in (str(PROJECT_ROOT / "src"), env.get("PYTHONPATH")) if part
+    )
     try:
         with log_path.open("a", encoding="utf-8") as log:
             subprocess.Popen(
@@ -35,6 +46,7 @@ def _start_worker(storage: ExperimentStorage, record: ExperimentRecord) -> None:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 cwd=PROJECT_ROOT,
+                env=env,
             )
     except OSError as exc:
         storage.set_status(record.id, "failed", str(exc))
@@ -42,6 +54,7 @@ def _start_worker(storage: ExperimentStorage, record: ExperimentRecord) -> None:
 
 
 def _create_and_start(storage: ExperimentStorage, config: ExperimentConfig) -> ExperimentRecord:
+    validate_device_available(config.device)
     record = storage.create_experiment(config)
     _start_worker(storage, record)
     return record
@@ -94,15 +107,22 @@ def _new_experiment_page(storage: ExperimentStorage) -> None:
 
     with st.form("new-experiment"):
         name = st.text_input("Experiment name", value=f"YOLOv8n {action}")
-        data = st.text_input("Dataset YAML", value=str(PROJECT_ROOT / "data" / "dataset.yaml"))
+        default_data = (
+            COCO8_YAML if COCO8_YAML.is_file() else PROJECT_ROOT / "data" / "dataset.yaml"
+        )
+        data = st.text_input("Dataset YAML", value=str(default_data))
         left, right = st.columns(2)
         scale = left.selectbox("Model scale", MODEL_SCALES)
-        device = right.text_input("Device", value="0")
+        device = right.selectbox(
+            "Device",
+            available_devices(),
+            format_func=lambda value: "CPU" if value == "cpu" else f"GPU {value}",
+        )
 
         first, second, third = st.columns(3)
-        imgsz = first.number_input("Image size", min_value=32, value=640)
-        batch = second.number_input("Batch", min_value=1, value=8)
-        default_epochs = 300 if action == "train" else 20
+        imgsz = first.number_input("Image size", min_value=32, value=320)
+        batch = second.number_input("Batch", min_value=1, value=4)
+        default_epochs = 1 if action == "train" else 20
         epochs = third.number_input("Epochs", min_value=1, value=default_epochs)
         iterations = 10
         if action == "tune":

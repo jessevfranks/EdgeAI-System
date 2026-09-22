@@ -23,6 +23,7 @@ class FakeYOLO:
         output = Path(kwargs["project"]) / kwargs["name"]
         (output / "weights").mkdir(parents=True, exist_ok=True)
         (output / "weights" / "best.pt").write_bytes(b"best")
+        (output / "weights" / "last.pt").write_bytes(b"last")
         (output / "results.csv").write_text(
             "epoch,metrics/precision(B),metrics/recall(B),metrics/mAP50(B),metrics/mAP50-95(B)\n"
             "1,0.7,0.6,0.65,0.45\n",
@@ -98,6 +99,22 @@ def test_evaluate_returns_key_metrics(tmp_path: Path, monkeypatch) -> None:
     assert metrics["speed_inference_ms"] == 4.2
 
 
+def test_worker_puts_trained_weights_in_artifacts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("model_development.experiments.yolo_class", lambda: FakeYOLO)
+    storage = ExperimentStorage(tmp_path / "runs" / "experiments.sqlite3")
+    record = storage.create_experiment(
+        ExperimentConfig(action="train", name="train", data=str(_dataset(tmp_path)))
+    )
+
+    assert run_worker(storage.path, record.id) == 0
+    assert storage.get(record.id).status == "completed"
+    assert (record.artifact_dir / "train" / "weights" / "best.pt").read_bytes() == b"best"
+    assert (record.artifact_dir / "train" / "weights" / "last.pt").read_bytes() == b"last"
+    assert record.best_checkpoint == str(record.artifact_dir / "train" / "weights" / "best.pt")
+    assert not list(Path(record.run_dir).rglob("*.pt"))
+    assert storage.metrics(record.id, "epoch")[0]["map50_95"] == 0.45
+
+
 def test_worker_records_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     storage = ExperimentStorage(tmp_path / "experiments.sqlite3")
     successful = storage.create_experiment(
@@ -124,3 +141,10 @@ def test_worker_records_success_and_failure(tmp_path: Path, monkeypatch) -> None
     Path(invalid.config["data"]).unlink()
     assert run_worker(storage.path, invalid.id) == 1
     assert storage.get(invalid.id).status == "failed"
+
+    unavailable_gpu = storage.create_experiment(
+        ExperimentConfig(action="train", name="no GPU", data=str(_dataset(tmp_path)), device="0")
+    )
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    assert run_worker(storage.path, unavailable_gpu.id) == 1
+    assert "CUDA device 0 is unavailable" in storage.get(unavailable_gpu.id).error

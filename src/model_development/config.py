@@ -15,13 +15,32 @@ def model_checkpoint(scale: str) -> str:
     return f"yolov8{scale}.pt"
 
 
+def available_devices() -> list[str]:
+    import torch
+
+    gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    return ["cpu", *(str(index) for index in range(gpu_count))]
+
+
+def validate_device_available(device: str) -> None:
+    if device == "cpu":
+        return
+    available = available_devices()
+    missing = [index for index in device.split(",") if index not in available]
+    if missing:
+        raise ValueError(
+            f"CUDA device {', '.join(missing)} is unavailable. "
+            f"Choose one of: {', '.join(available)}"
+        )
+
+
 @dataclass(slots=True)
 class ExperimentConfig:
     action: str
     name: str
     data: str
     scale: str = "n"
-    device: str = "0"
+    device: str = "cpu"
     imgsz: int = 640
     batch: int = 8
     epochs: int = 300
@@ -36,6 +55,11 @@ class ExperimentConfig:
         if not self.name.strip():
             raise ValueError("Experiment name cannot be empty")
         model_checkpoint(self.scale)
+        self.device = self.device.strip().lower()
+        if self.device != "cpu" and not all(
+            part.isdecimal() for part in self.device.split(",")
+        ):
+            raise ValueError("Device must be 'cpu' or a CUDA index such as '0'")
         if not Path(self.data).expanduser().is_file():
             raise ValueError(f"Dataset does not exist: {self.data}")
         if self.imgsz < 32 or self.batch < 1 or self.epochs < 1 or self.iterations < 1:

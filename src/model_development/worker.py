@@ -8,8 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .config import ExperimentConfig
-from .experiments import evaluate_model, train_model, tune_model
+from .config import ExperimentConfig, validate_device_available
+from .experiments import evaluate_model, move_checkpoints, train_model, tune_model
 from .metrics import sync_metrics
 from .storage import ExperimentStorage
 
@@ -26,11 +26,14 @@ def run_worker(database_path: str | Path, experiment_id: str) -> int:
     record = storage.get(experiment_id)
     try:
         config = ExperimentConfig.from_dict(record.config)
+        validate_device_available(config.device)
         storage.set_status(experiment_id, "running")
         result = WORKFLOWS[config.action](config, Path(record.run_dir))
         if result:
             storage.save_metric(experiment_id, "evaluation", 0, result)
         sync_metrics(storage, record)
+        if config.action in {"train", "tune"}:
+            move_checkpoints(Path(record.run_dir), record.artifact_dir)
         storage.set_status(experiment_id, "completed")
         return 0
     except Exception as exc:  # noqa: BLE001 - record failures from the worker boundary
