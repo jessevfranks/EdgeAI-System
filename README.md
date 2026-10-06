@@ -83,6 +83,23 @@ Camera integrations provide a Pillow image to `ImageAcquirer.acquire`. Add
 callable processing steps to `ImagePipeline`; an empty pipeline saves an
 unchanged processed copy.
 
+Pass the acquired frame to an `InferencePipeline` configured with a TensorRT
+engine to save detections and an annotated image:
+
+```python
+from onboard import ImageAcquirer, InferencePipeline
+
+frame = ImageAcquirer().acquire(camera_image)
+result = InferencePipeline("artifacts/models/plant_detector.engine").infer(frame)
+
+for detection in result.detections:
+    print(detection.class_name, detection.confidence)
+```
+
+The engine must already be built for the NVIDIA target. Inference does not
+export checkpoints or download model files. Results use the frame filename and
+are stored under `data/onboard/annotated/` and `data/onboard/detections/`.
+
 ## Database reset
 
 The simplified database is not compatible with the earlier experiment schema.
