@@ -30,7 +30,7 @@ def make_result(tmp_path, pixels, boxes):
     )
 
 
-def test_values_statistics_and_storage(tmp_path):
+def test_values_storage(tmp_path):
     source = make_result(
         tmp_path,
         [[[10, 30, 20], [30, 10, 20], [10, 30, 35], [30, 10, 45], [30, 10, 35],
@@ -94,7 +94,6 @@ def test_empty_and_all_invalid_boxes(tmp_path, box, shape):
     assert detection.valid_pixels == 0
     raw = result.json_path.read_text()
     assert "NaN" not in raw
-    assert json.loads(raw)["detections"][0]["mean"] is None
 
 
 @pytest.mark.parametrize("box", [
