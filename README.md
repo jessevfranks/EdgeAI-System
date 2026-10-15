@@ -100,6 +100,41 @@ The engine must already be built for the NVIDIA target. Inference does not
 export checkpoints or download model files. Results use the frame filename and
 are stored under `data/onboard/annotated/` and `data/onboard/detections/`.
 
+### Per-detection VARI
+
+Compute `(g-r)/(g+r-b)` from every pixel inside each detection's bounding box:
+
+```python
+import numpy as np
+from onboard import VariCalculator
+
+vari_result = VariCalculator().compute(result)  # result is an InferenceResult
+for detection in vari_result.detections:
+    print(detection.detection.class_name, detection.mean, detection.valid_pixels)
+
+with np.load(vari_result.npz_path, allow_pickle=False) as arrays:
+    first_map = arrays["detection_0"] if vari_result.detections else None
+```
+
+The calculator uses the processed RGB image so detection coordinates align.
+Color-altering preprocessing therefore affects VARI. Box minima round down,
+maxima round up, and bounds clip to the image; maximum bounds are exclusive.
+Overlapping detections retain their own maps, including background pixels.
+Zero denominators produce `NaN` pixels excluded from statistics; other values
+are preserved, including values outside `[-1, 1]`.
+
+Each frame produces `data/onboard/vari/<frame_stem>.json` with detection metadata,
+clipped bounds `(x_min, y_min, x_max, y_max)`, pixel counts, mean, median, minimum,
+and maximum. A matching compressed `.npz` stores float32 maps under
+`detection_0`, `detection_1`, etc., in inference order. JSON records each array
+key and links to the source image, inference JSON, and NPZ file. Empty boxes
+or boxes without valid pixels have null statistics. Frames without detections
+produce an empty detection list and archive. Recomputing replaces both files.
+
+Keep the existing PNG images alongside these results: saved bounds reconstruct
+RGB crops without storing duplicate images. Supply the same `storage_root` to
+acquisition, inference, and VARI calculation when using a custom directory.
+
 ## Database reset
 
 The simplified database is not compatible with the earlier experiment schema.

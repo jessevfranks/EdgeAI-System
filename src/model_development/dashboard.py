@@ -238,7 +238,7 @@ def _experiments_page(storage: ExperimentStorage) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="EdgeAI Experiments", page_icon="🎯", layout="wide")
+    st.set_page_config(page_title="EdgeAI Experiments", page_icon="", layout="wide")
     st.title("EdgeAI YOLOv8 Experiments")
     storage = ExperimentStorage(DATABASE_PATH)
     page = st.sidebar.radio("Workspace", ["New Experiment", "Experiments"])
