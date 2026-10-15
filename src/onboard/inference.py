@@ -10,7 +10,8 @@ from typing import Any
 from PIL import Image
 from ultralytics import YOLO
 
-from .acquisition import AcquiredFrame, FrameMetadata
+from .acquisition import FrameMetadata
+from .processing import ProcessedFrame
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,10 +72,10 @@ class InferencePipeline:
 
         self.model = YOLO(str(self.engine_path), task="detect")
 
-    def infer(self, frame: AcquiredFrame) -> InferenceResult:
+    def infer(self, frame: ProcessedFrame) -> InferenceResult:
         """Infer from a stored processed image and persist its results."""
-        if not isinstance(frame, AcquiredFrame):
-            raise TypeError("InferencePipeline expects an AcquiredFrame")
+        if not isinstance(frame, ProcessedFrame):
+            raise TypeError("InferencePipeline expects a ProcessedFrame")
         if not frame.processed_path.is_file():
             raise FileNotFoundError(
                 f"Processed image does not exist: {frame.processed_path}"

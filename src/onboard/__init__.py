@@ -2,7 +2,8 @@
 
 from .acquisition import AcquiredFrame, FrameMetadata, ImageAcquirer
 from .inference import Detection, InferencePipeline, InferenceResult
-from .processing import ImagePipeline, ImageProcessor
+from .orchestrator import OnboardOrchestrator, OrchestrationResult
+from .processing import ImagePipeline, ImageProcessor, ProcessedFrame
 from .vari import DetectionVari, VariCalculator, VariResult
 
 __all__ = [
@@ -15,6 +16,9 @@ __all__ = [
     "ImageProcessor",
     "InferencePipeline",
     "InferenceResult",
+    "OnboardOrchestrator",
+    "OrchestrationResult",
+    "ProcessedFrame",
     "VariCalculator",
     "VariResult",
 ]

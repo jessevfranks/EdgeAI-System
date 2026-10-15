@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from onboard import Detection, ImageAcquirer, InferencePipeline
+from onboard import Detection, ImageAcquirer, ImagePipeline, InferencePipeline
 
 
 class FakeTensor:
@@ -51,11 +51,13 @@ class FakeModel:
         return [self.result]
 
 
-def acquired_frame(tmp_path: Path):
-    return ImageAcquirer(tmp_path / "onboard").acquire(
+def processed_frame(tmp_path: Path):
+    storage_root = tmp_path / "onboard"
+    acquired = ImageAcquirer(storage_root).acquire(
         Image.new("RGB", (3, 2), (1, 2, 3)),
         datetime(2026, 10, 6, 12, tzinfo=UTC),
     )
+    return ImagePipeline(storage_root=storage_root).process(acquired)
 
 
 def install_fake_model(monkeypatch, result: FakeResult):
@@ -78,7 +80,7 @@ def test_engine_path_must_be_an_existing_engine_file(tmp_path: Path) -> None:
 
 
 def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) -> None:
-    frame = acquired_frame(tmp_path)
+    frame = processed_frame(tmp_path)
     engine_path = tmp_path / "models" / "detector.engine"
     engine_path.parent.mkdir()
     engine_path.touch()
@@ -160,7 +162,7 @@ def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) ->
 def test_infer_supports_frames_without_detections(
     monkeypatch, tmp_path: Path, boxes
 ) -> None:
-    frame = acquired_frame(tmp_path)
+    frame = processed_frame(tmp_path)
     engine_path = tmp_path / "model.engine"
     engine_path.touch()
     install_fake_model(monkeypatch, FakeResult(boxes))
@@ -176,7 +178,7 @@ def test_infer_supports_frames_without_detections(
 def test_inference_failure_keeps_acquired_images_without_outputs(
     monkeypatch, tmp_path: Path
 ) -> None:
-    frame = acquired_frame(tmp_path)
+    frame = processed_frame(tmp_path)
     engine_path = tmp_path / "model.engine"
     engine_path.touch()
 
@@ -193,7 +195,6 @@ def test_inference_failure_keeps_acquired_images_without_outputs(
     with pytest.raises(RuntimeError, match="inference failed"):
         pipeline.infer(frame)
 
-    assert frame.raw_path.is_file()
     assert frame.processed_path.is_file()
     assert list(pipeline.annotated_dir.iterdir()) == []
     assert list(pipeline.detections_dir.iterdir()) == []

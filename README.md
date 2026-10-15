@@ -11,8 +11,8 @@ YOLOv8 object-detection models from a local Streamlit dashboard.
 - Evaluate trained checkpoints on the validation or test split.
 - Store experiment status, epoch metrics, tuning trials, evaluation metrics,
   and winning hyperparameters in SQLite.
-- Receive RGB camera frames, assign persistent frame IDs and UTC timestamps,
-  and save raw and processed copies through an extendable onboard pipeline.
+- Run RGB camera frames through separate acquisition, processing, inference,
+  and VARI stages while saving each stage's outputs.
 
 Each experiment runs in a separate background process so the dashboard remains
 usable. The app intentionally has no device scheduler, stop control, automatic
@@ -79,21 +79,33 @@ data/onboard/
 `-- processed/frame_000001_20260910T132345123456Z.png
 ```
 
-Camera integrations provide a Pillow image to `ImageAcquirer.acquire`. Add
-callable processing steps to `ImagePipeline`; an empty pipeline saves an
-unchanged processed copy.
-
-Pass the acquired frame to an `InferencePipeline` configured with a TensorRT
-engine to save detections and an annotated image:
+Camera integrations provide a Pillow image to `ImageAcquirer.acquire`. Pass its
+`AcquiredFrame` to `ImagePipeline.process`; an empty processing pipeline saves
+an unchanged processed copy. Inference consumes the resulting `ProcessedFrame`:
 
 ```python
-from onboard import ImageAcquirer, InferencePipeline
+from onboard import ImageAcquirer, ImagePipeline, InferencePipeline, VariCalculator
 
-frame = ImageAcquirer().acquire(camera_image)
-result = InferencePipeline("artifacts/models/plant_detector.engine").infer(frame)
+acquired = ImageAcquirer().acquire(camera_image)
+processed = ImagePipeline().process(acquired)
+inference = InferencePipeline(
+    "artifacts/models/plant_detector.engine"
+).infer(processed)
+vari = VariCalculator().compute(inference)
 
-for detection in result.detections:
+for detection in inference.detections:
     print(detection.class_name, detection.confidence)
+```
+
+`OnboardOrchestrator` constructs these stages and runs the same sequence for
+applications that want a single entry point:
+
+```python
+from onboard import OnboardOrchestrator
+
+result = OnboardOrchestrator(
+    "artifacts/models/plant_detector.engine"
+).run(camera_image)
 ```
 
 The engine must already be built for the NVIDIA target. Inference does not
@@ -108,7 +120,7 @@ Compute `(g-r)/(g+r-b)` from every pixel inside each detection's bounding box:
 import numpy as np
 from onboard import VariCalculator
 
-vari_result = VariCalculator().compute(result)  # result is an InferenceResult
+vari_result = VariCalculator().compute(inference)
 for detection in vari_result.detections:
     print(detection.detection.class_name, detection.mean, detection.valid_pixels)
 
@@ -133,7 +145,8 @@ produce an empty detection list and archive. Recomputing replaces both files.
 
 Keep the existing PNG images alongside these results: saved bounds reconstruct
 RGB crops without storing duplicate images. Supply the same `storage_root` to
-acquisition, inference, and VARI calculation when using a custom directory.
+acquisition, processing, inference, and VARI calculation when using a custom
+directory. The orchestrator does this for all stages automatically.
 
 ## Database reset
 
