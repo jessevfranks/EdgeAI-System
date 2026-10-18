@@ -32,7 +32,7 @@ class InferenceResult:
     """Stored outputs and detections for one processed frame."""
 
     metadata: FrameMetadata
-    engine_path: Path
+    model_path: Path
     processed_path: Path
     annotated_path: Path
     json_path: Path
@@ -40,26 +40,32 @@ class InferenceResult:
 
 
 class InferencePipeline:
-    """Load one TensorRT engine and reuse it for processed frame inference."""
+    """Load one CPU checkpoint or CUDA engine for processed-frame inference."""
 
     def __init__(
         self,
-        engine_path: str | Path,
+        model_path: str | Path,
         device: str = "0",
         imgsz: int = 640,
         confidence: float = 0.25,
         iou: float = 0.7,
         storage_root: str | Path = "data/onboard",
     ) -> None:
-        self.engine_path = Path(engine_path).expanduser().resolve()
-        if self.engine_path.suffix.lower() != ".engine":
-            raise ValueError("Inference model must be a TensorRT .engine file")
-        if not self.engine_path.is_file():
-            raise FileNotFoundError(
-                f"TensorRT engine does not exist: {self.engine_path}"
+        self.model_path = Path(model_path).expanduser().resolve()
+        self.device = device.strip().lower()
+        if self.device == "cpu":
+            required_suffix = ".pt"
+        elif self.device.isdecimal():
+            required_suffix = ".engine"
+        else:
+            raise ValueError("Device must be 'cpu' or a CUDA index such as '0'")
+        if self.model_path.suffix.lower() != required_suffix:
+            raise ValueError(
+                f"Device '{self.device}' requires a {required_suffix} inference model"
             )
+        if not self.model_path.is_file():
+            raise FileNotFoundError(f"Inference model does not exist: {self.model_path}")
 
-        self.device = device
         self.imgsz = imgsz
         self.confidence = confidence
         self.iou = iou
@@ -70,7 +76,7 @@ class InferencePipeline:
         self.annotated_dir.mkdir(parents=True, exist_ok=True)
         self.detections_dir.mkdir(parents=True, exist_ok=True)
 
-        self.model = YOLO(str(self.engine_path), task="detect")
+        self.model = YOLO(str(self.model_path), task="detect")
 
     def infer(self, frame: ProcessedFrame) -> InferenceResult:
         """Infer from a stored processed image and persist its results."""
@@ -104,7 +110,7 @@ class InferencePipeline:
 
         inference_result = InferenceResult(
             metadata=frame.metadata,
-            engine_path=self.engine_path,
+            model_path=self.model_path,
             processed_path=frame.processed_path,
             annotated_path=annotated_path,
             json_path=json_path,
@@ -146,7 +152,7 @@ class InferencePipeline:
         record = {
             "frame_id": result.metadata.frame_id,
             "captured_at": result.metadata.captured_at.isoformat(),
-            "engine_path": str(result.engine_path),
+            "model_path": str(result.model_path),
             "processed_path": str(result.processed_path),
             "annotated_path": str(result.annotated_path),
             "detections": [asdict(detection) for detection in result.detections],

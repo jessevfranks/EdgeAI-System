@@ -27,7 +27,7 @@ class OnboardOrchestrator:
 
     def __init__(
         self,
-        engine_path: str | Path,
+        model_path: str | Path,
         storage_root: str | Path = "data/onboard",
         device: str = "0",
         imgsz: int = 640,
@@ -38,7 +38,7 @@ class OnboardOrchestrator:
         self.processor = ImagePipeline(storage_root=storage_root)
         # TODO: Add image-processing steps to self.processor here.
         self.inference = InferencePipeline(
-            engine_path=engine_path,
+            model_path=model_path,
             device=device,
             imgsz=imgsz,
             confidence=confidence,

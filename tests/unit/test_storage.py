@@ -19,6 +19,9 @@ def test_create_list_and_update_status(tmp_path: Path) -> None:
     assert "experiment_id" not in record.config
     assert storage.list()[0].name == "run"
     assert storage.set_status(record.id, "completed").status == "completed"
+    exporting = storage.set_export_status(record.id, "failed", "TensorRT unavailable")
+    assert exporting.export_status == "failed"
+    assert exporting.export_error == "TensorRT unavailable"
 
 
 def test_metric_upserts_are_idempotent(tmp_path: Path) -> None:
@@ -36,6 +39,10 @@ def test_best_checkpoint_finds_existing_run_weights(tmp_path: Path) -> None:
     checkpoint.parent.mkdir(parents=True)
     checkpoint.write_bytes(b"best")
     assert record.best_checkpoint == str(checkpoint)
+    checkpoint.with_suffix(".onnx").touch()
+    checkpoint.with_suffix(".engine").touch()
+    assert record.best_onnx == str(checkpoint.with_suffix(".onnx"))
+    assert record.best_engine == str(checkpoint.with_suffix(".engine"))
 
 
 def test_legacy_database_preserves_history_and_accepts_new_runs(tmp_path: Path) -> None:
@@ -97,3 +104,28 @@ def test_legacy_database_preserves_history_and_accepts_new_runs(tmp_path: Path) 
     assert len(reopened.list()) == 2
     assert reopened.get("old") == old
     assert reopened.metrics(new.id, "epoch") == [{"step": 1, "map50_95": 0.6}]
+
+
+def test_current_database_gains_export_columns(tmp_path: Path) -> None:
+    path = tmp_path / "experiments.sqlite3"
+    config = _config(tmp_path)
+    with sqlite3.connect(path) as db:
+        db.execute(
+            """CREATE TABLE experiments (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                run_dir TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                error TEXT
+            )"""
+        )
+        db.execute(
+            "INSERT INTO experiments VALUES (?, ?, ?, ?, ?, ?)",
+            ("current", "completed", json.dumps(config.to_dict()), str(tmp_path), "now", None),
+        )
+
+    record = ExperimentStorage(path).get("current")
+
+    assert record.export_status == "not_applicable"
+    assert record.export_error is None

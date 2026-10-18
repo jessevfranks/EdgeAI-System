@@ -53,12 +53,12 @@ def test_orchestrator_constructs_and_runs_stages_in_order(monkeypatch, tmp_path:
     events: list[object] = []
     outputs = (object(), object(), object(), object())
     install_fake_stages(monkeypatch, events, outputs)
-    engine_path = tmp_path / "model.engine"
+    model_path = tmp_path / "model.engine"
     image = Image.new("RGB", (1, 1))
     captured_at = datetime(2026, 10, 15, tzinfo=UTC)
 
     orchestrator = OnboardOrchestrator(
-        engine_path,
+        model_path,
         storage_root=tmp_path,
         device="1",
         imgsz=320,
@@ -73,7 +73,7 @@ def test_orchestrator_constructs_and_runs_stages_in_order(monkeypatch, tmp_path:
         (
             "construct_inference",
             {
-                "engine_path": engine_path,
+                "model_path": model_path,
                 "device": "1",
                 "imgsz": 320,
                 "confidence": 0.4,

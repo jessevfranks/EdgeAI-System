@@ -64,19 +64,34 @@ def install_fake_model(monkeypatch, result: FakeResult):
     constructed = []
     model = FakeModel(result)
 
-    def fake_yolo(engine_path: str, task: str):
-        constructed.append((engine_path, task))
+    def fake_yolo(model_path: str, task: str):
+        constructed.append((model_path, task))
         return model
 
     monkeypatch.setattr("onboard.inference.yolo_class", lambda: fake_yolo)
     return model, constructed
 
 
-def test_engine_path_must_be_an_existing_engine_file(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match=r"\.engine"):
-        InferencePipeline(tmp_path / "model.pt")
+def test_model_path_must_match_device_and_exist(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match=r"requires a \.engine"):
+        InferencePipeline(tmp_path / "model.pt", device="0")
+    with pytest.raises(ValueError, match=r"requires a \.pt"):
+        InferencePipeline(tmp_path / "model.engine", device="cpu")
+    with pytest.raises(ValueError, match="Device must"):
+        InferencePipeline(tmp_path / "model.pt", device="cuda")
     with pytest.raises(FileNotFoundError, match="does not exist"):
         InferencePipeline(tmp_path / "missing.engine")
+
+
+def test_cpu_inference_loads_a_pt_checkpoint(monkeypatch, tmp_path: Path) -> None:
+    checkpoint = tmp_path / "best.pt"
+    checkpoint.touch()
+    _, constructed = install_fake_model(monkeypatch, FakeResult(None))
+
+    pipeline = InferencePipeline(checkpoint, device="cpu", storage_root=tmp_path / "onboard")
+
+    assert pipeline.model_path == checkpoint.resolve()
+    assert constructed == [(str(checkpoint.resolve()), "detect")]
 
 
 def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) -> None:
@@ -132,7 +147,7 @@ def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) ->
     assert record == {
         "frame_id": 1,
         "captured_at": "2026-10-06T12:00:00+00:00",
-        "engine_path": str(engine_path.resolve()),
+        "model_path": str(engine_path.resolve()),
         "processed_path": str(frame.processed_path),
         "annotated_path": str(result.annotated_path),
         "detections": [
@@ -188,7 +203,7 @@ def test_inference_failure_keeps_acquired_images_without_outputs(
 
     monkeypatch.setattr(
         "onboard.inference.yolo_class",
-        lambda: lambda engine_path, task: FailingModel(),
+        lambda: lambda model_path, task: FailingModel(),
     )
     pipeline = InferencePipeline(engine_path, storage_root=tmp_path / "onboard")
 

@@ -19,7 +19,7 @@ def make_result(tmp_path, pixels, boxes):
     Image.fromarray(np.array(pixels, dtype=np.uint8)).save(path)
     return InferenceResult(
         metadata=FrameMetadata(7, datetime(2026, 10, 13, tzinfo=UTC)),
-        engine_path=tmp_path / "model.engine",
+        model_path=tmp_path / "model.engine",
         processed_path=path,
         annotated_path=tmp_path / "annotated.png",
         json_path=tmp_path / "inference.json",

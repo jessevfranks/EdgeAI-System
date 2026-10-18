@@ -21,6 +21,8 @@ class ExperimentRecord:
     run_dir: str
     created_at: str
     error: str | None = None
+    export_status: str = "not_applicable"
+    export_error: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> ExperimentRecord:
@@ -31,6 +33,8 @@ class ExperimentRecord:
             run_dir=row["run_dir"],
             created_at=row["created_at"],
             error=row["error"],
+            export_status=row["export_status"],
+            export_error=row["export_error"],
         )
 
     @property
@@ -55,12 +59,23 @@ class ExperimentRecord:
 
     @property
     def best_checkpoint(self) -> str | None:
-        checkpoints = list(self.artifact_dir.rglob("best.pt"))
-        if not checkpoints:
-            checkpoints = list(Path(self.run_dir).rglob("best.pt"))
-        if not checkpoints:
+        return self._latest_artifact("best.pt")
+
+    @property
+    def best_onnx(self) -> str | None:
+        return self._latest_artifact("best.onnx")
+
+    @property
+    def best_engine(self) -> str | None:
+        return self._latest_artifact("best.engine")
+
+    def _latest_artifact(self, filename: str) -> str | None:
+        matches = list(self.artifact_dir.rglob(filename))
+        if not matches:
+            matches = list(Path(self.run_dir).rglob(filename))
+        if not matches:
             return None
-        return str(max(checkpoints, key=lambda path: path.stat().st_mtime).resolve())
+        return str(max(matches, key=lambda path: path.stat().st_mtime).resolve())
 
 
 class ExperimentStorage:
@@ -81,7 +96,9 @@ class ExperimentStorage:
                     config_json TEXT NOT NULL,
                     run_dir TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    error TEXT
+                    error TEXT,
+                    export_status TEXT NOT NULL DEFAULT 'not_applicable',
+                    export_error TEXT
                 )
                 """
             )
@@ -94,6 +111,14 @@ class ExperimentStorage:
                     FROM experiments_legacy"""
                 )
                 db.execute("DROP TABLE experiments_legacy")
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(experiments)")}
+            if "export_status" not in columns:
+                db.execute(
+                    "ALTER TABLE experiments ADD COLUMN export_status "
+                    "TEXT NOT NULL DEFAULT 'not_applicable'"
+                )
+            if "export_error" not in columns:
+                db.execute("ALTER TABLE experiments ADD COLUMN export_error TEXT")
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS metrics (
@@ -151,6 +176,16 @@ class ExperimentStorage:
         with self._connect() as db:
             db.execute(
                 "UPDATE experiments SET status = ?, error = ? WHERE id = ?",
+                (status, error, experiment_id),
+            )
+        return self.get(experiment_id)
+
+    def set_export_status(
+        self, experiment_id: str, status: str, error: str | None = None
+    ) -> ExperimentRecord:
+        with self._connect() as db:
+            db.execute(
+                "UPDATE experiments SET export_status = ?, export_error = ? WHERE id = ?",
                 (status, error, experiment_id),
             )
         return self.get(experiment_id)

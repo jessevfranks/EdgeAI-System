@@ -11,6 +11,8 @@ YOLOv8 object-detection models from a local Streamlit dashboard.
 - Evaluate trained checkpoints on the validation or test split.
 - Store experiment status, epoch metrics, tuning trials, evaluation metrics,
   and winning hyperparameters in SQLite.
+- Export the best checkpoint from CUDA training runs to ONNX and a static FP16
+  TensorRT engine while retaining both PyTorch checkpoints.
 - Run RGB camera frames through separate acquisition, processing, inference,
   and VARI stages while saving each stage's outputs.
 
@@ -22,7 +24,9 @@ them on the same GPU at the same time.
 ## Setup
 
 Python 3.11 and a PyTorch build appropriate for the training computer are
-required. From the repository root:
+required. CUDA exports also require a compatible NVIDIA GPU, CUDA installation,
+and TensorRT Python package on the machine that will run the engine. From the
+repository root:
 
 ```powershell
 python -m venv .venv
@@ -67,8 +71,16 @@ artifacts/
 `-- <experiment-id>/
     `-- train/weights/
         |-- best.pt
-        `-- last.pt
+        |-- last.pt
+        |-- best.onnx
+        `-- best.engine
 ```
+
+CPU training runs retain the `.pt` checkpoints and mark deployment export as
+skipped. A TensorRT export error is shown separately in the experiment view and
+does not discard or fail otherwise successful training. TensorRT engines are
+specific to their build environment, so build and run an engine on a compatible
+NVIDIA GPU and TensorRT version.
 
 Onboard frames are stored under the ignored `data/onboard/` directory. Raw
 captures and processed results share the same labeled PNG filename:
@@ -89,7 +101,8 @@ from onboard import ImageAcquirer, ImagePipeline, InferencePipeline, VariCalcula
 acquired = ImageAcquirer().acquire(camera_image)
 processed = ImagePipeline().process(acquired)
 inference = InferencePipeline(
-    "artifacts/models/plant_detector.engine"
+    "artifacts/<experiment-id>/train/weights/best.engine",
+    device="0",
 ).infer(processed)
 vari = VariCalculator().compute(inference)
 
@@ -104,13 +117,16 @@ applications that want a single entry point:
 from onboard import OnboardOrchestrator
 
 result = OnboardOrchestrator(
-    "artifacts/models/plant_detector.engine"
+    "artifacts/<experiment-id>/train/weights/best.engine",
+    device="0",
 ).run(camera_image)
 ```
 
-The engine must already be built for the NVIDIA target. Inference does not
-export checkpoints or download model files. Results use the frame filename and
-are stored under `data/onboard/annotated/` and `data/onboard/detections/`.
+For CPU testing, pass `best.pt` with `device="cpu"`. CUDA inference requires a
+`.engine` model and a numeric device such as `"0"`; CPU inference requires a
+`.pt` model. Inference does not export checkpoints or download model files.
+Results use the frame filename and are stored under `data/onboard/annotated/`
+and `data/onboard/detections/`.
 
 ### Per-detection VARI
 

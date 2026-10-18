@@ -107,12 +107,73 @@ def test_worker_puts_trained_weights_in_artifacts(tmp_path: Path, monkeypatch) -
     )
 
     assert run_worker(storage.path, record.id) == 0
-    assert storage.get(record.id).status == "completed"
+    completed = storage.get(record.id)
+    assert completed.status == "completed"
+    assert completed.export_status == "skipped"
     assert (record.artifact_dir / "train" / "weights" / "best.pt").read_bytes() == b"best"
     assert (record.artifact_dir / "train" / "weights" / "last.pt").read_bytes() == b"last"
     assert record.best_checkpoint == str(record.artifact_dir / "train" / "weights" / "best.pt")
     assert not list(Path(record.run_dir).rglob("*.pt"))
     assert storage.metrics(record.id, "epoch")[0]["map50_95"] == 0.45
+
+
+def test_gpu_worker_exports_best_checkpoint(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("model_development.experiments.yolo_class", lambda: FakeYOLO)
+    monkeypatch.setattr("model_development.worker.validate_device_available", lambda device: None)
+    converted = []
+
+    class FakeConverter:
+        def __init__(self, checkpoint, device, imgsz) -> None:
+            converted.append((Path(checkpoint), device, imgsz))
+            self.checkpoint = Path(checkpoint)
+
+        def convert(self) -> None:
+            self.checkpoint.with_suffix(".onnx").write_bytes(b"onnx")
+            self.checkpoint.with_suffix(".engine").write_bytes(b"engine")
+
+    monkeypatch.setattr("model_development.worker.ModelArtifactConverter", FakeConverter)
+    storage = ExperimentStorage(tmp_path / "runs" / "experiments.sqlite3")
+    record = storage.create_experiment(
+        ExperimentConfig(
+            action="train", name="gpu", data=str(_dataset(tmp_path)), device="0", imgsz=320
+        )
+    )
+
+    assert run_worker(storage.path, record.id) == 0
+
+    completed = storage.get(record.id)
+    best = record.artifact_dir / "train" / "weights" / "best.pt"
+    assert converted == [(best.resolve(), "0", 320)]
+    assert completed.status == "completed"
+    assert completed.export_status == "completed"
+    assert completed.best_onnx == str(best.with_suffix(".onnx").resolve())
+    assert completed.best_engine == str(best.with_suffix(".engine").resolve())
+
+
+def test_export_failure_does_not_fail_training(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("model_development.experiments.yolo_class", lambda: FakeYOLO)
+    monkeypatch.setattr("model_development.worker.validate_device_available", lambda device: None)
+
+    class FailingConverter:
+        def __init__(self, checkpoint, device, imgsz) -> None:
+            pass
+
+        def convert(self) -> None:
+            raise RuntimeError("TensorRT unavailable")
+
+    monkeypatch.setattr("model_development.worker.ModelArtifactConverter", FailingConverter)
+    storage = ExperimentStorage(tmp_path / "runs" / "experiments.sqlite3")
+    record = storage.create_experiment(
+        ExperimentConfig(action="train", name="gpu", data=str(_dataset(tmp_path)), device="0")
+    )
+
+    assert run_worker(storage.path, record.id) == 0
+
+    completed = storage.get(record.id)
+    assert completed.status == "completed"
+    assert completed.export_status == "failed"
+    assert completed.export_error == "TensorRT unavailable"
+    assert completed.best_checkpoint is not None
 
 
 def test_worker_records_success_and_failure(tmp_path: Path, monkeypatch) -> None:

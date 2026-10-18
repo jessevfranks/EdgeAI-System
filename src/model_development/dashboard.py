@@ -207,6 +207,7 @@ def _experiments_page(storage: ExperimentStorage) -> None:
                 "type": record.action,
                 "scale": record.scale,
                 "status": record.status,
+                "export": record.export_status,
                 "device": record.device,
                 "progress": len(rows),
                 "best fitness": _best_fitness(rows),
@@ -226,8 +227,22 @@ def _experiments_page(storage: ExperimentStorage) -> None:
     st.caption(f"Status: {record.status} · Model: YOLOv8{record.scale} · Device: {record.device}")
     if record.error:
         st.error(record.error)
+    if record.export_error:
+        st.warning(f"Model export failed: {record.export_error}")
     _show_metrics(rows)
     _experiment_actions(storage, record, rows)
+
+    artifacts = {
+        "best.pt": record.best_checkpoint,
+        "best.onnx": record.best_onnx,
+        "best.engine": record.best_engine,
+    }
+    if any(artifacts.values()):
+        with st.expander("Model artifacts"):
+            st.caption(f"Export status: {record.export_status}")
+            for name, path in artifacts.items():
+                if path:
+                    st.code(f"{name}: {path}")
 
     with st.expander("Configuration"):
         st.json(record.config)
