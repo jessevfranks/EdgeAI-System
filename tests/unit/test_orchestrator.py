@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 
 import onboard.orchestrator as orchestrator_module
-from onboard import OnboardOrchestrator, OrchestrationResult
+from onboard import OnboardOrchestrator, OrchestrationResult, StreamFrame
 
 
 def install_fake_stages(monkeypatch, events: list[object], outputs: tuple[object, ...]):
@@ -112,3 +112,27 @@ def test_orchestrator_stops_when_a_stage_fails(monkeypatch, tmp_path: Path):
         ("infer_failed", outputs[1]),
     ]
     assert not any(event[0] == "compute" for event in events)
+
+
+def test_orchestrator_runs_stream_frames_in_order(monkeypatch, tmp_path: Path):
+    events: list[object] = []
+    outputs = (object(), object(), object(), object())
+    install_fake_stages(monkeypatch, events, outputs)
+    orchestrator = OnboardOrchestrator(tmp_path / "model.engine", tmp_path)
+    first = Image.new("RGB", (1, 1), "red")
+    second = Image.new("RGB", (1, 1), "blue")
+    first_time = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    second_time = datetime(2026, 10, 20, 13, tzinfo=UTC)
+    frames = (
+        StreamFrame(first, first_time, tmp_path / "first.png"),
+        StreamFrame(second, second_time, tmp_path / "second.png"),
+    )
+
+    results = list(orchestrator.run_stream(frames))
+
+    assert results == [OrchestrationResult(*outputs), OrchestrationResult(*outputs)]
+    acquire_events = [event for event in events if event[0] == "acquire"]
+    assert acquire_events == [
+        ("acquire", first, first_time),
+        ("acquire", second, second_time),
+    ]

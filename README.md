@@ -122,6 +122,27 @@ result = OnboardOrchestrator(
 ).run(camera_image)
 ```
 
+### Testing the onboard pipeline with images
+
+Set `model`, `device`, `imgsz`, `confidence`, `iou`, `storage_root`, and `fps`
+in `configs/onboard.yaml`, then point the test runner at a directory:
+
+```powershell
+python scripts/run_onboard.py test-images path/to/test-images --config configs/onboard.yaml
+```
+
+The runner examines only the top level of the directory. It processes PNG,
+JPEG, BMP, TIFF, and WebP files once in the order returned by the operating
+system, without sorting them. Other files are ignored. The first image is
+processed immediately; later images are introduced at the configured FPS. Time
+spent running the pipeline counts toward that interval, so the runner sleeps
+only when it is ahead of schedule. It exits after all selected images finish,
+or cleanly when interrupted with Ctrl+C.
+
+Each image passes through acquisition, processing, inference, and VARI using
+the same `storage_root`. The command prints frame completion and detection
+counts, but does not collect performance metrics.
+
 For CPU testing, pass `best.pt` with `device="cpu"`. CUDA inference requires a
 `.engine` model and a numeric device such as `"0"`; CPU inference requires a
 `.pt` model. Inference does not export checkpoints or download model files.

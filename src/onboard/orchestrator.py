@@ -5,12 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Iterable, Iterator
 
 from PIL import Image
 
 from .acquisition import AcquiredFrame, ImageAcquirer
 from .inference import InferencePipeline, InferenceResult
 from .processing import ImagePipeline, ProcessedFrame
+from .sources import StreamFrame
 from .vari import VariCalculator, VariResult
 
 
@@ -48,7 +50,7 @@ class OnboardOrchestrator:
         self.vari = VariCalculator(storage_root)
 
         # TODO: Run independent frames concurrently when the pipeline requires it.
-        # TODO: Add metrics collection and logging when their requirements are known.
+        # TODO: Add metrics collection and logging.
 
     def run(
         self,
@@ -65,3 +67,11 @@ class OnboardOrchestrator:
             inference_result=inference_result,
             vari_result=vari_result,
         )
+
+    def run_stream(
+        self,
+        frames: Iterable[StreamFrame],
+    ) -> Iterator[OrchestrationResult]:
+        """Process input frames sequentially until the source is exhausted."""
+        for frame in frames:
+            yield self.run(frame.image, frame.captured_at)

@@ -1,6 +1,8 @@
 """Onboard RGB image acquisition and processing."""
 
 from .acquisition import AcquiredFrame, FrameMetadata, ImageAcquirer
+from .config import OnboardConfig
+from .sources import PacedImageDirectory, StreamFrame
 from .inference import Detection, InferencePipeline, InferenceResult
 from .orchestrator import OnboardOrchestrator, OrchestrationResult
 from .processing import ImagePipeline, ImageProcessor, ProcessedFrame
@@ -17,8 +19,11 @@ __all__ = [
     "InferencePipeline",
     "InferenceResult",
     "OnboardOrchestrator",
+    "OnboardConfig",
     "OrchestrationResult",
+    "PacedImageDirectory",
     "ProcessedFrame",
+    "StreamFrame",
     "VariCalculator",
     "VariResult",
 ]

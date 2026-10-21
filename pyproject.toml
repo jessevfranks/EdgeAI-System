@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.26,<3",
     "onnx>=1.12,<2",
     "Pillow>=11,<12",
+    "PyYAML>=6,<7",
     "streamlit>=1.40,<2",
     "ultralytics>=8.3,<9",
 ]
