@@ -5,18 +5,10 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 from typing import Any
+from ultralytics import YOLO
 
 from .config import ExperimentConfig
 from .metrics import result_metrics
-
-
-def yolo_class() -> Any:
-    try:
-        from ultralytics import YOLO
-
-        return YOLO
-    except ImportError as exc:
-        raise RuntimeError("Install the project dependencies before running an experiment") from exc
 
 
 def move_checkpoints(run_dir: Path, artifact_dir: Path) -> None:
@@ -28,7 +20,7 @@ def move_checkpoints(run_dir: Path, artifact_dir: Path) -> None:
 
 
 def train_model(config: ExperimentConfig, run_dir: Path) -> None:
-    model = yolo_class()(config.checkpoint)
+    model = YOLO(config.checkpoint)
     model.train(
         **config.yolo_args(),
         project=str(run_dir),
@@ -41,7 +33,7 @@ def train_model(config: ExperimentConfig, run_dir: Path) -> None:
 
 def tune_model(config: ExperimentConfig, run_dir: Path) -> None:
     """Run Ultralytics' built-in genetic hyperparameter tuner."""
-    model = yolo_class()(config.checkpoint)
+    model = YOLO(config.checkpoint)
     model.tune(
         **config.yolo_args(),
         iterations=config.iterations,
@@ -56,7 +48,7 @@ def tune_model(config: ExperimentConfig, run_dir: Path) -> None:
 
 
 def evaluate_model(config: ExperimentConfig, run_dir: Path) -> dict[str, Any]:
-    model = yolo_class()(config.checkpoint)
+    model = YOLO(config.checkpoint)
     result = model.val(
         **config.yolo_args(),
         split=config.split,
