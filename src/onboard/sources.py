@@ -10,7 +10,7 @@ from typing import Iterator
 
 from PIL import Image, UnidentifiedImageError
 
-SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
+SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".avif", ".webp"}
 _open_image = Image.open
 if _open_image.__module__ == "ultralytics.utils.patches":
     # Ultralytics wraps all Pillow failures with an optional HEIF install attempt.

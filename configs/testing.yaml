@@ -1,0 +1,8 @@
+# Reserved for the onboard RGB inference pipeline.
+model: artifacts/c5f10924e4a7/train/weights/best.pt
+device: "cpu"
+imgsz: 640
+confidence: 0.25
+iou: 0.7
+storage_root: data/testing/potted_plants
+fps: 3
