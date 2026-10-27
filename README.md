@@ -74,6 +74,7 @@ data/
 |       |-- annotated/             # Detection images
 |       |-- detections/            # Detection JSON
 |       |-- vari/                  # VARI JSON and NPZ arrays
+|       |-- metrics/               # One runtime-metrics JSON per invocation
 |       `-- vari_overlays/         # Optional colorized VARI images
 `-- onboard/                       # Default live-pipeline storage_root
     |-- raw/
@@ -81,6 +82,7 @@ data/
     |-- annotated/
     |-- detections/
     |-- vari/
+    |-- metrics/
     `-- vari_overlays/                 # Optional
 ```
 
@@ -178,7 +180,16 @@ or cleanly when interrupted with Ctrl+C.
 
 Each image passes through acquisition, processing, inference, and VARI using
 the same `storage_root`. The command prints frame completion and detection
-counts, but does not collect performance metrics.
+counts and writes one timestamped runtime-metrics JSON file under
+`<storage_root>/metrics/`.
+
+Each metrics file includes per-frame pipeline, inference-stage, and model-call
+latencies, along with periodic system and process CPU utilization. Numeric CUDA
+devices also collect device-wide GPU utilization and power when NVML supports
+those readings. The power samples are integrated into an estimated GPU energy
+value. Missing GPU telemetry does not stop the pipeline; the file records why
+it was unavailable. Metrics are finalized for completed, interrupted, and
+failed runs.
 
 For CPU testing, pass `best.pt` with `device="cpu"`. CUDA inference requires a
 `.engine` model and a numeric device such as `"0"`; CPU inference requires a

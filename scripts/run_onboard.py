@@ -25,12 +25,18 @@ def main(arguments: list[str] | None = None) -> int:
     sys.path.insert(0, str(project / "src"))
     os.chdir(project)
 
-    from onboard import OnboardConfig, OnboardOrchestrator, PacedImageDirectory
+    from onboard import (
+        MetricsCollector,
+        OnboardConfig,
+        OnboardOrchestrator,
+        PacedImageDirectory,
+    )
 
     args = parse_args(arguments)
     try:
         config = OnboardConfig.from_yaml(args.config)
         source = PacedImageDirectory(args.directory, config.fps)
+        metrics = MetricsCollector(config.storage_root, config.device)
         orchestrator = OnboardOrchestrator(
             model_path=config.model,
             storage_root=config.storage_root,
@@ -38,6 +44,7 @@ def main(arguments: list[str] | None = None) -> int:
             imgsz=config.imgsz,
             confidence=config.confidence,
             iou=config.iou,
+            metrics=metrics,
         )
         for result in orchestrator.run_stream(source):
             frame_id = result.acquired_frame.metadata.frame_id

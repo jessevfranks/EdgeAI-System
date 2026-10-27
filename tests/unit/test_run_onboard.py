@@ -7,6 +7,7 @@ from scripts import run_onboard
 
 def test_test_images_command_runs_directory_source(monkeypatch, tmp_path: Path, capsys) -> None:
     events: list[object] = []
+    metrics_instances: list[object] = []
     config = SimpleNamespace(
         model="model.pt",
         storage_root="data/onboard",
@@ -38,8 +39,14 @@ def test_test_images_command_runs_directory_source(monkeypatch, tmp_path: Path, 
                 inference_result=SimpleNamespace(detections=(object(), object())),
             )
 
+    class FakeMetrics:
+        def __init__(self, storage_root, device):
+            events.append(("metrics", storage_root, device))
+            metrics_instances.append(self)
+
     monkeypatch.setattr(onboard, "OnboardConfig", FakeConfig)
     monkeypatch.setattr(onboard, "PacedImageDirectory", FakeSource)
+    monkeypatch.setattr(onboard, "MetricsCollector", FakeMetrics)
     monkeypatch.setattr(onboard, "OnboardOrchestrator", FakeOrchestrator)
     config_path = tmp_path / "settings.yaml"
 
@@ -48,9 +55,10 @@ def test_test_images_command_runs_directory_source(monkeypatch, tmp_path: Path, 
     )
 
     assert exit_code == 0
-    assert events[:3] == [
+    assert events[:4] == [
         ("config", config_path),
         ("source", tmp_path, 3),
+        ("metrics", "data/onboard", "cpu"),
         (
             "orchestrator",
             {
@@ -60,6 +68,7 @@ def test_test_images_command_runs_directory_source(monkeypatch, tmp_path: Path, 
                 "imgsz": 320,
                 "confidence": 0.4,
                 "iou": 0.6,
+                "metrics": metrics_instances[0],
             },
         ),
     ]

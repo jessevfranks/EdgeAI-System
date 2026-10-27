@@ -51,6 +51,14 @@ class FakeModel:
         return [self.result]
 
 
+class FakeMetrics:
+    def __init__(self) -> None:
+        self.predictions = []
+
+    def record_model_prediction(self, frame_id, latency_ms) -> None:
+        self.predictions.append((frame_id, latency_ms))
+
+
 def processed_frame(tmp_path: Path):
     storage_root = tmp_path / "onboard"
     acquired = ImageAcquirer(storage_root).acquire(
@@ -105,6 +113,9 @@ def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) ->
         [1.0, 0.0],
     )
     model, constructed = install_fake_model(monkeypatch, FakeResult(boxes))
+    metrics = FakeMetrics()
+    counters = iter((10.0, 10.125))
+    monkeypatch.setattr("onboard.inference.time.perf_counter", lambda: next(counters))
 
     pipeline = InferencePipeline(
         engine_path,
@@ -113,10 +124,12 @@ def test_infer_returns_and_stores_all_detections(monkeypatch, tmp_path: Path) ->
         confidence=0.4,
         iou=0.6,
         storage_root=tmp_path / "onboard",
+        metrics=metrics,
     )
     result = pipeline.infer(frame)
 
     assert constructed == [(str(engine_path.resolve()), "detect")]
+    assert metrics.predictions == [(1, 125.0)]
     assert model.calls == [
         {
             "source": str(frame.processed_path),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from PIL import Image
 from ultralytics import YOLO
 
 from .acquisition import FrameMetadata
+from .metrics import MetricsCollector
 from .processing import ProcessedFrame
 
 
@@ -50,6 +52,7 @@ class InferencePipeline:
         confidence: float = 0.25,
         iou: float = 0.7,
         storage_root: str | Path = "data/onboard",
+        metrics: MetricsCollector | None = None,
     ) -> None:
         self.model_path = Path(model_path).expanduser().resolve()
         self.device = device.strip().lower()
@@ -69,6 +72,7 @@ class InferencePipeline:
         self.imgsz = imgsz
         self.confidence = confidence
         self.iou = iou
+        self.metrics = metrics
 
         storage_root = Path(storage_root).expanduser().resolve()
         self.annotated_dir = storage_root / "annotated"
@@ -87,6 +91,7 @@ class InferencePipeline:
                 f"Processed image does not exist: {frame.processed_path}"
             )
 
+        prediction_started = time.perf_counter()
         results = self.model.predict(
             source=str(frame.processed_path),
             device=self.device,
@@ -96,6 +101,12 @@ class InferencePipeline:
             verbose=False,
             save=False,
         )
+        prediction_latency_ms = (time.perf_counter() - prediction_started) * 1000
+        if self.metrics is not None:
+            self.metrics.record_model_prediction(
+                frame.metadata.frame_id,
+                prediction_latency_ms,
+            )
         if len(results) != 1:
             raise RuntimeError("Expected one inference result for one processed frame")
 

@@ -2,10 +2,11 @@
 
 from .acquisition import AcquiredFrame, FrameMetadata, ImageAcquirer
 from .config import OnboardConfig
-from .sources import PacedImageDirectory, StreamFrame
 from .inference import Detection, InferencePipeline, InferenceResult
+from .metrics import MetricsCollector
 from .orchestrator import OnboardOrchestrator, OrchestrationResult
 from .processing import ImagePipeline, ImageProcessor, ProcessedFrame
+from .sources import PacedImageDirectory, StreamFrame
 from .vari import DetectionVari, VariCalculator, VariResult
 
 __all__ = [
@@ -18,8 +19,9 @@ __all__ = [
     "ImageProcessor",
     "InferencePipeline",
     "InferenceResult",
-    "OnboardOrchestrator",
+    "MetricsCollector",
     "OnboardConfig",
+    "OnboardOrchestrator",
     "OrchestrationResult",
     "PacedImageDirectory",
     "ProcessedFrame",

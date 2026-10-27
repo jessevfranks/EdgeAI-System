@@ -1,5 +1,7 @@
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -79,6 +81,7 @@ def test_orchestrator_constructs_and_runs_stages_in_order(monkeypatch, tmp_path:
                 "confidence": 0.4,
                 "iou": 0.6,
                 "storage_root": tmp_path,
+                "metrics": None,
             },
         ),
         ("construct_vari", tmp_path),
@@ -136,3 +139,46 @@ def test_orchestrator_runs_stream_frames_in_order(monkeypatch, tmp_path: Path):
         ("acquire", first, first_time),
         ("acquire", second, second_time),
     ]
+
+
+def test_stream_uses_one_metrics_run_for_all_frames(monkeypatch, tmp_path: Path):
+    events: list[object] = []
+    acquired = SimpleNamespace(metadata=SimpleNamespace(frame_id=4))
+    outputs = (acquired, object(), object(), object())
+    install_fake_stages(monkeypatch, events, outputs)
+
+    class FakeMetrics:
+        @contextmanager
+        def run(self):
+            events.append("metrics_start")
+            try:
+                yield
+            finally:
+                events.append("metrics_finish")
+
+        def record_frame(self, **values):
+            events.append(("metrics_frame", values))
+
+    metrics = FakeMetrics()
+    orchestrator = OnboardOrchestrator(
+        tmp_path / "model.engine",
+        tmp_path,
+        metrics=metrics,  # type: ignore[arg-type]
+    )
+    frames = (
+        StreamFrame(Image.new("RGB", (1, 1)), datetime.now(UTC), tmp_path / "1.png"),
+        StreamFrame(Image.new("RGB", (1, 1)), datetime.now(UTC), tmp_path / "2.png"),
+    )
+
+    results = list(orchestrator.run_stream(frames))
+
+    assert results == [OrchestrationResult(*outputs), OrchestrationResult(*outputs)]
+    assert events.count("metrics_start") == 1
+    assert events.count("metrics_finish") == 1
+    metric_frames = [
+        event
+        for event in events
+        if isinstance(event, tuple) and event[0] == "metrics_frame"
+    ]
+    assert len(metric_frames) == 2
+    assert all(event[1]["frame_id"] == 4 for event in metric_frames)
