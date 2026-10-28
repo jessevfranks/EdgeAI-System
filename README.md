@@ -56,6 +56,15 @@ default. CPU runs use `device=cpu`; a detected GPU uses its numeric index,
 such as `device=0`. Device choice is an experiment setting, not part of the
 dataset YAML.
 
+### Training augmentation
+
+Training and tuning augment images in memory without changing the source
+dataset. Each training sample receives random changes of up to approximately
+8 degrees of hue, 25% saturation and brightness, 20% scale, and 7 degrees of
+shear in either direction. Other Ultralytics augmentations are disabled.
+Genetic tuning optimizes the learning, warmup, and detection-loss settings
+while keeping these augmentation limits fixed.
+
 ## Data and generated files
 
 The ignored `data/` directory separates training datasets, repeatable test
